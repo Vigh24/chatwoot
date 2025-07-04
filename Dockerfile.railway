@@ -13,11 +13,53 @@ ENTRYPOINT ["multirun"]
 COPY <<-'EOT' /startup.sh
 #!/bin/sh
 
+# Function to extract database connection parameters from DATABASE_URL if needed
+setup_db_params() {
+  # If PGHOST is empty but DATABASE_URL is set, extract host and port from DATABASE_URL
+  if [ -z "$PGHOST" ] && [ -n "$DATABASE_URL" ]; then
+    echo "PGHOST is not set, extracting from DATABASE_URL..."
+    
+    # Extract host and port from DATABASE_URL
+    # Format: postgres://username:password@host:port/database
+    DB_URL_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\).*/\1/p')
+    DB_URL_PORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+    
+    if [ -n "$DB_URL_HOST" ]; then
+      export PGHOST=$DB_URL_HOST
+      echo "Extracted PGHOST from DATABASE_URL: $PGHOST"
+    fi
+    
+    if [ -n "$DB_URL_PORT" ]; then
+      export PGPORT=$DB_URL_PORT
+      echo "Extracted PGPORT from DATABASE_URL: $PGPORT"
+    else
+      export PGPORT=5432
+      echo "Using default PGPORT: 5432"
+    fi
+  fi
+  
+  # Set default port if still empty
+  if [ -z "$PGPORT" ]; then
+    export PGPORT=5432
+    echo "PGPORT not set, using default: 5432"
+  fi
+  
+  # If PGHOST is still empty, use default
+  if [ -z "$PGHOST" ]; then
+    echo "WARNING: PGHOST is not set and could not be extracted from DATABASE_URL"
+    echo "Using 'postgres' as default host, but this may not work"
+    export PGHOST="postgres"
+  fi
+}
+
 # Function to check database connection with retries
 check_db_connection() {
   echo "Checking database connection..."
   max_retries=30
   retries=0
+  
+  # Setup database parameters if needed
+  setup_db_params
   
   # Print environment variables for debugging (without exposing passwords)
   echo "Database connection parameters:"
@@ -26,6 +68,7 @@ check_db_connection() {
   echo "DATABASE_URL is set: $(if [ -n "$DATABASE_URL" ]; then echo "yes"; else echo "no"; fi)"
   
   while [ $retries -lt $max_retries ]; do
+    echo "Attempting to connect to PostgreSQL at $PGHOST:$PGPORT..."
     if pg_isready -h $PGHOST -p $PGPORT; then
       echo "Database connection successful!"
       return 0
