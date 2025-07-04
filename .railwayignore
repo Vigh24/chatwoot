@@ -1,0 +1,20 @@
+# Ignore large directories and files to reduce upload size
+.git/
+node_modules/
+tmp/
+log/
+.pnpm-store/
+vendor/bundle/
+public/packs/
+public/packs-test/
+public/assets/
+storage/
+*.zip
+*.gz
+*.tar
+*.rar
+*.pdf
+*.mp4
+*.mov
+*.avi
+*.iso

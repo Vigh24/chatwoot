@@ -1,0 +1,9 @@
+FROM chatwoot/chatwoot:latest
+
+ARG FRONTEND_URL ACTIVE_STORAGE_SERVICE DATABASE_URL PGHOST PGPORT DEFAULT_LOCALE INSTALLATION_ENV NODE_ENV RAILS_ENV REDIS_URL SECRET_KEY_BASE PORT
+
+RUN apk add --no-cache multirun postgresql-client
+
+ENTRYPOINT ["multirun"]
+
+CMD ["bundle exec sidekiq -C config/sidekiq.yml", "bundle exec rails s -b 0.0.0.0 -p $PORT"]
