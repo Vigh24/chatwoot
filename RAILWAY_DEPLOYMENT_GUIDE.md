@@ -124,6 +124,51 @@ This indicates that the Chatwoot container cannot reach the PostgreSQL server de
 4. **Restart Services**: Try restarting both the PostgreSQL service and the Chatwoot service
 5. **Manual Configuration**: If automatic extraction isn't working, manually set the `PGHOST` and `PGPORT` variables in your Railway project settings
 
+### PostgreSQL Vector Extension Requirement
+
+Chatwoot v4.0+ requires the PostgreSQL `vector` extension for AI features. If you see errors like:
+
+```
+PG::FeatureNotSupported: ERROR: extension "vector" is not available
+DETAIL: Could not open extension control file "/usr/share/postgresql/16/extension/vector.control": No such file or directory.
+HINT: The extension must first be installed on the system where PostgreSQL is running.
+```
+
+This means your PostgreSQL database doesn't have the required extension. To resolve this:
+
+1. **Use a PostgreSQL provider that supports the vector extension**:
+   - Railway's default PostgreSQL may not include this extension
+   - Consider using a different PostgreSQL add-on or provider that supports the vector extension
+   - Some options include Supabase, Neon, or a self-hosted PostgreSQL instance with the extension installed
+
+2. **Automatic Workaround (New)**:
+   - The updated Dockerfile now includes an automatic workaround that allows Chatwoot to run without the vector extension
+   - When the extension is not detected, the startup script will:
+     - Create a backup of the schema.rb file
+     - Comment out the vector extension requirement and related tables
+     - Proceed with database initialization
+     - Restore the original schema file after initialization
+   - **Note**: This workaround will disable AI features but allow the rest of Chatwoot to function normally
+
+3. **For advanced users**:
+   - If you have access to the PostgreSQL server, you can install the extension manually:
+     ```
+     # On the PostgreSQL server
+     sudo apt-get install postgresql-14-pgvector  # Adjust version as needed
+     ```
+   - Then enable it in your database:
+     ```
+     CREATE EXTENSION vector;
+     ```
+
+4. **Expected Behavior with Workaround**:
+   - During startup, you'll see messages about the missing vector extension
+   - The system will apply the workaround and continue initialization
+   - AI-related features (Captain AI, article embeddings) will be unavailable
+   - All other Chatwoot features will work normally
+
+For more information, see the Chatwoot documentation at https://chwt.app/v4/migration
+
 ### Database Schema Issues
 
 If you see errors like `PG::UndefinedTable: ERROR: relation "installation_configs" does not exist`:

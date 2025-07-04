@@ -81,22 +81,118 @@ check_db_connection() {
   return 1
 }
 
+# Function to check for required PostgreSQL extensions
+check_pg_extensions() {
+  echo "Checking for required PostgreSQL extensions..."
+  
+  # Extract username from DATABASE_URL if available
+  local pg_user="postgres"
+  if [ -n "$DATABASE_URL" ]; then
+    extracted_user=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
+    if [ -n "$extracted_user" ]; then
+      pg_user=$extracted_user
+    fi
+  fi
+  
+  # Use POSTGRES_USERNAME if set
+  if [ -n "$POSTGRES_USERNAME" ]; then
+    pg_user=$POSTGRES_USERNAME
+  fi
+  
+  echo "Using database user: $pg_user"
+  
+  # Connect to PostgreSQL and check if vector extension is available
+  if ! psql -h $PGHOST -p $PGPORT -U $pg_user -d postgres -c "SELECT * FROM pg_available_extensions WHERE name = 'vector';" 2>/dev/null | grep -q "vector"; then
+    echo "ERROR: PostgreSQL 'vector' extension is not available on the server."
+    echo "This extension is required for Chatwoot v4.0+ for AI features."
+    echo "Please install the extension on your PostgreSQL server or use a managed PostgreSQL service that supports it."
+    echo "For Railway.app: You may need to use a custom PostgreSQL add-on that supports the vector extension."
+    echo "See: https://chwt.app/v4/migration for more information."
+    return 1
+  fi
+  
+  echo "PostgreSQL vector extension is available."
+  return 0
+}
+
+# Function to apply vector extension workaround if needed
+apply_vector_workaround() {
+  local has_vector=$1
+  
+  if [ "$has_vector" = "false" ]; then
+    echo "Applying workaround for missing vector extension..."
+    
+    # Create a backup of the schema.rb file
+    cp /app/db/schema.rb /app/db/schema.rb.bak
+    
+    # Comment out the vector extension line in schema.rb
+    sed -i 's/enable_extension "vector"/# enable_extension "vector" # Temporarily disabled due to missing extension/g' /app/db/schema.rb
+    
+    # Also comment out vector-related tables and indexes
+    sed -i 's/create_table "article_embeddings"/# create_table "article_embeddings" # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
+    sed -i 's/create_table "captain_assistant_responses"/# create_table "captain_assistant_responses" # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
+    sed -i 's/create_table "captain_assistants"/# create_table "captain_assistants" # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
+    sed -i 's/create_table "captain_documents"/# create_table "captain_documents" # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
+    sed -i 's/create_table "captain_inboxes"/# create_table "captain_inboxes" # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
+    
+    # Also comment out any vector-related indexes
+    sed -i 's/add_index.*vector_idx_knowledge_entries_embedding.*/# & # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
+    sed -i 's/add_index.*embedding.*using: :ivfflat.*/# & # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
+    
+    echo "Modified schema.rb to work without vector extension"
+    echo "NOTE: AI features will not be available in this deployment"
+  fi
+}
+
+# Function to restore original schema file
+restore_schema_file() {
+  if [ -f "/app/db/schema.rb.bak" ]; then
+    echo "Restoring original schema.rb file..."
+    cp /app/db/schema.rb.bak /app/db/schema.rb
+    rm /app/db/schema.rb.bak
+  fi
+}
+
 # Function to initialize database
 init_database() {
   echo "Initializing database..."
+  
+  # Check for required PostgreSQL extensions first
+  local has_vector="true"
+  check_pg_extensions || {
+    echo "WARNING: Continuing without vector extension. Some AI features will not work."
+    has_vector="false"
+  }
+  
+  # Apply workaround if vector extension is not available
+  apply_vector_workaround "$has_vector"
   
   # Try to create database if it doesn't exist
   echo "Attempting to create database if it doesn't exist..."
   bundle exec rails db:create 2>/dev/null || echo "Database may already exist, continuing..."
   
   echo "Running chatwoot_prepare..."
-  bundle exec rails db:chatwoot_prepare || return 1
+  bundle exec rails db:chatwoot_prepare || {
+    echo "Database initialization failed during chatwoot_prepare."
+    echo "If you see 'extension vector is not available' errors, please see: https://chwt.app/v4/migration"
+    restore_schema_file
+    return 1
+  }
   
   echo "Running schema load..."
-  bundle exec rails db:schema:load || return 1
+  bundle exec rails db:schema:load || {
+    restore_schema_file
+    return 1
+  }
   
   echo "Running migrations..."
-  bundle exec rails db:migrate || return 1
+  bundle exec rails db:migrate || {
+    restore_schema_file
+    return 1
+  }
+  
+  # Restore original schema file after successful initialization
+  restore_schema_file
   
   echo "Verifying database setup..."
   # Check if installation_configs table exists
