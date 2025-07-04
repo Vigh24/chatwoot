@@ -141,14 +141,16 @@ This means your PostgreSQL database doesn't have the required extension. To reso
    - Consider using a different PostgreSQL add-on or provider that supports the vector extension
    - Some options include Supabase, Neon, or a self-hosted PostgreSQL instance with the extension installed
 
-2. **Automatic Workaround (New)**:
+2. **Automatic Workaround (Improved)**:
    - The updated Dockerfile now includes an automatic workaround that allows Chatwoot to run without the vector extension
    - When the extension is not detected, the startup script will:
      - Create a backup of the schema.rb file
-     - Comment out the vector extension requirement and related tables
+     - Comment out the vector extension requirement
+     - Completely remove vector-related tables and indexes from the schema
      - Proceed with database initialization
      - Restore the original schema file after initialization
    - **Note**: This workaround will disable AI features but allow the rest of Chatwoot to function normally
+   - The improved implementation ensures there are no syntax errors in the modified schema
 
 3. **For advanced users**:
    - If you have access to the PostgreSQL server, you can install the extension manually:

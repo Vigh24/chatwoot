@@ -128,16 +128,25 @@ apply_vector_workaround() {
     # Comment out the vector extension line in schema.rb
     sed -i 's/enable_extension "vector"/# enable_extension "vector" # Temporarily disabled due to missing extension/g' /app/db/schema.rb
     
-    # Also comment out vector-related tables and indexes
-    sed -i 's/create_table "article_embeddings"/# create_table "article_embeddings" # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
-    sed -i 's/create_table "captain_assistant_responses"/# create_table "captain_assistant_responses" # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
-    sed -i 's/create_table "captain_assistants"/# create_table "captain_assistants" # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
-    sed -i 's/create_table "captain_documents"/# create_table "captain_documents" # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
-    sed -i 's/create_table "captain_inboxes"/# create_table "captain_inboxes" # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
+    # Remove vector-related tables completely (instead of just commenting the first line)
+    # For article_embeddings
+    sed -i '/create_table "article_embeddings"/,/^  end$/d' /app/db/schema.rb
     
-    # Also comment out any vector-related indexes
-    sed -i 's/add_index.*vector_idx_knowledge_entries_embedding.*/# & # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
-    sed -i 's/add_index.*embedding.*using: :ivfflat.*/# & # Temporarily disabled due to missing vector extension/g' /app/db/schema.rb
+    # For captain_assistant_responses
+    sed -i '/create_table "captain_assistant_responses"/,/^  end$/d' /app/db/schema.rb
+    
+    # For captain_assistants
+    sed -i '/create_table "captain_assistants"/,/^  end$/d' /app/db/schema.rb
+    
+    # For captain_documents
+    sed -i '/create_table "captain_documents"/,/^  end$/d' /app/db/schema.rb
+    
+    # For captain_inboxes
+    sed -i '/create_table "captain_inboxes"/,/^  end$/d' /app/db/schema.rb
+    
+    # Remove vector-related indexes
+    sed -i '/add_index.*vector_idx_knowledge_entries_embedding.*/d' /app/db/schema.rb
+    sed -i '/add_index.*embedding.*using: :ivfflat.*/d' /app/db/schema.rb
     
     echo "Modified schema.rb to work without vector extension"
     echo "NOTE: AI features will not be available in this deployment"
