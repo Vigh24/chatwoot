@@ -10,6 +10,9 @@ RUN apk add --no-cache multirun postgresql-client
 ENTRYPOINT ["multirun"]
 
 # Create a startup script to handle database operations and application startup
-RUN echo '#!/bin/sh\npg_isready -h $PGHOST -p $PGPORT && bundle exec rails db:chatwoot_prepare && bundle exec rails db:migrate\nexec multirun "bundle exec sidekiq -C config/sidekiq.yml" "bundle exec rails s -b 0.0.0.0 -p $PORT"' > /startup.sh && chmod +x /startup.sh
+RUN printf '#!/bin/sh\n\npg_isready -h $PGHOST -p $PGPORT && bundle exec rails db:chatwoot_prepare && bundle exec rails db:migrate\nexec multirun "bundle exec sidekiq -C config/sidekiq.yml" "bundle exec rails s -b 0.0.0.0 -p $PORT"\n' > /startup.sh \
+    && chmod +x /startup.sh \
+    && cat /startup.sh \
+    && ls -la /startup.sh
 
 CMD ["/startup.sh"]
