@@ -8,5 +8,19 @@
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
+  },
+  "services": {
+    "postgres": {
+      "image": "pgvector/pgvector:pg16",
+      "envs": {
+        "POSTGRES_DB": "chatwoot",
+        "POSTGRES_USER": "postgres",
+        "POSTGRES_PASSWORD": "${POSTGRES_PASSWORD}"
+      }
+    },
+    "redis": {
+      "image": "redis:alpine",
+      "command": "redis-server --requirepass ${REDIS_PASSWORD}"
+    }
   }
 }

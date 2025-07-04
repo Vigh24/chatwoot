@@ -26,13 +26,22 @@ Make sure you have a copy of the Chatwoot repository with the Railway-specific f
 
 You need to add the following services to your Railway project:
 
-1. **PostgreSQL**
-   - Click "+ New" and select "Database → PostgreSQL"
-   - Railway will automatically set up the database and provide connection variables
+1. **PostgreSQL with pgvector support (Required for Chatwoot v4.0+)**
+   - Chatwoot v4.0+ requires PostgreSQL with the pgvector extension for AI features
+   - Click "+" and select "Empty Service"
+   - Set the service name to "postgres"
+   - Set the image to "pgvector/pgvector:pg16"
+   - Add the following environment variables:
+     - `POSTGRES_DB`: chatwoot
+     - `POSTGRES_USER`: postgres
+     - `POSTGRES_PASSWORD`: your_secure_password (use the same password as in your main service)
+
+   **Alternative (Not Recommended)**: If you use Railway's default PostgreSQL service, Chatwoot will automatically apply a workaround that disables AI features but allows the rest of the application to function normally.
 
 2. **Redis**
-   - Click "+ New" and select "Database → Redis"
+   - Click "+" and select "Database → Redis"
    - Railway will automatically set up Redis and provide connection variables
+   - Optionally, you can set a password for Redis by adding the environment variable `REDIS_PASSWORD` to both your Redis service and main Chatwoot service
 
 ### 4. Configure Environment Variables
 
@@ -129,6 +138,13 @@ This indicates that the Chatwoot container cannot reach the PostgreSQL server de
 Chatwoot v4.0+ requires the PostgreSQL `vector` extension for AI features. If you see errors like:
 
 ```
+ERROR: PostgreSQL 'vector' extension is not available on the server.
+This extension is required for Chatwoot v4.0+ for AI features.
+```
+
+or
+
+```
 PG::FeatureNotSupported: ERROR: extension "vector" is not available
 DETAIL: Could not open extension control file "/usr/share/postgresql/16/extension/vector.control": No such file or directory.
 HINT: The extension must first be installed on the system where PostgreSQL is running.
@@ -136,27 +152,33 @@ HINT: The extension must first be installed on the system where PostgreSQL is ru
 
 This means your PostgreSQL database doesn't have the required extension. To resolve this:
 
-1. **Use a PostgreSQL provider that supports the vector extension**:
-   - Railway's default PostgreSQL may not include this extension
-   - Consider using a different PostgreSQL add-on or provider that supports the vector extension
-   - Some options include Supabase, Neon, or a self-hosted PostgreSQL instance with the extension installed
+1. **Use the pgvector/pgvector:pg16 image (Recommended)**:
+   - The updated railway.json file includes configuration for a PostgreSQL service using the pgvector/pgvector:pg16 image
+   - This image has the vector extension pre-installed and ready to use
+   - To set up manually:
+     1. Delete your current PostgreSQL service in Railway
+     2. Add a new service and select "Empty Service"
+     3. Set the service name to "postgres"
+     4. Set the image to "pgvector/pgvector:pg16"
+     5. Add environment variables: POSTGRES_DB=chatwoot, POSTGRES_USER=postgres, POSTGRES_PASSWORD=your_password
+     6. Restart your Chatwoot service after setting up the new PostgreSQL service
 
-2. **Automatic Workaround (Improved)**:
-   - The updated Dockerfile now includes an automatic workaround that allows Chatwoot to run without the vector extension
+2. **Automatic Workaround**:
+   - The updated Dockerfile.railway includes an automatic workaround that allows Chatwoot to run without the vector extension
    - When the extension is not detected, the startup script will:
      - Create a backup of the schema.rb file
      - Comment out the vector extension requirement
-     - Completely remove vector-related tables and indexes from the schema
-     - Proceed with database initialization
+     - Remove vector-related tables and indexes from the schema
+     - Modify migration files to disable vector extension requirements
+     - Proceed with database initialization using DISABLE_DATABASE_ENVIRONMENT_CHECK=1
      - Restore the original schema file after initialization
    - **Note**: This workaround will disable AI features but allow the rest of Chatwoot to function normally
-   - The improved implementation ensures there are no syntax errors in the modified schema
 
 3. **For advanced users**:
    - If you have access to the PostgreSQL server, you can install the extension manually:
      ```
      # On the PostgreSQL server
-     sudo apt-get install postgresql-14-pgvector  # Adjust version as needed
+     sudo apt-get install postgresql-16-pgvector  # Adjust version as needed
      ```
    - Then enable it in your database:
      ```
@@ -166,8 +188,8 @@ This means your PostgreSQL database doesn't have the required extension. To reso
 4. **Expected Behavior with Workaround**:
    - During startup, you'll see messages about the missing vector extension
    - The system will apply the workaround and continue initialization
-   - AI-related features (Captain AI, article embeddings) will be unavailable
-   - All other Chatwoot features will work normally
+   - You'll see a message: "NOTE: AI features will not be available in this deployment"
+   - All non-AI Chatwoot features will work normally
 
 For more information, see the Chatwoot documentation at https://chwt.app/v4/migration
 

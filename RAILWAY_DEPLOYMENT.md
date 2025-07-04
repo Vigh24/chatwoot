@@ -79,12 +79,29 @@ Make sure to set the following environment variables in your Railway project:
 - `RAILS_ENV`: Set to `production`
 - `NODE_ENV`: Set to `production`
 - `RAILS_LOG_TO_STDOUT`: Set to `true`
+- `POSTGRES_PASSWORD`: A secure password for your PostgreSQL database
+- `REDIS_PASSWORD`: A secure password for your Redis instance
 
 Railway will automatically set up the following variables for you:
 
 - `DATABASE_URL`: Connection string for PostgreSQL
 - `REDIS_URL`: Connection string for Redis
 - `PORT`: The port your application should listen on
+
+## PostgreSQL with pgvector Support (Required for Chatwoot v4.0+)
+
+Chatwoot v4.0+ requires PostgreSQL with the pgvector extension for AI features. The updated railway.json file includes configuration for a PostgreSQL service using the pgvector/pgvector:pg16 image, which has the vector extension pre-installed.
+
+If you're setting up manually:
+
+1. Add a new PostgreSQL service to your Railway project
+2. Use the `pgvector/pgvector:pg16` image instead of the default PostgreSQL image
+3. Set the following environment variables for the PostgreSQL service:
+   - `POSTGRES_DB`: chatwoot
+   - `POSTGRES_USER`: postgres
+   - `POSTGRES_PASSWORD`: your_secure_password (same as the POSTGRES_PASSWORD in your main service)
+
+If you're using an existing PostgreSQL service without pgvector support, the Chatwoot application will automatically apply a workaround that disables AI features but allows the rest of the application to function normally.
 
 ## Troubleshooting
 

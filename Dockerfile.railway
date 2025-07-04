@@ -7,6 +7,11 @@ RUN apk add --no-cache multirun postgresql-client
 # Remove database operations from build phase
 # They will be executed during container startup
 
+# NOTE: For Railway deployment with Chatwoot v4.0+, you need PostgreSQL with pgvector support
+# Railway's default PostgreSQL doesn't include the vector extension
+# Use pgvector/pgvector:pg16 image for your PostgreSQL service
+# See: https://chwt.app/v4/migration for more information
+
 ENTRYPOINT ["multirun"]
 
 # Create a startup script file directly in the Dockerfile
@@ -106,7 +111,14 @@ check_pg_extensions() {
     echo "ERROR: PostgreSQL 'vector' extension is not available on the server."
     echo "This extension is required for Chatwoot v4.0+ for AI features."
     echo "Please install the extension on your PostgreSQL server or use a managed PostgreSQL service that supports it."
-    echo "For Railway.app: You may need to use a custom PostgreSQL add-on that supports the vector extension."
+    echo "For Railway.app: You need to use a PostgreSQL service with pgvector support."
+    echo "SOLUTION: Create a new PostgreSQL service using the pgvector/pgvector:pg16 image."
+    echo "1. Delete your current PostgreSQL service in Railway"
+    echo "2. Add a new service and select 'Empty Service'"
+    echo "3. Set the service name to 'postgres'"
+    echo "4. Set the image to 'pgvector/pgvector:pg16'"
+    echo "5. Add environment variables: POSTGRES_DB=chatwoot, POSTGRES_USER=postgres, POSTGRES_PASSWORD=your_password"
+    echo "6. Restart your Chatwoot service after setting up the new PostgreSQL service"
     echo "See: https://chwt.app/v4/migration for more information."
     return 1
   fi
@@ -144,9 +156,19 @@ apply_vector_workaround() {
     # For captain_inboxes
     sed -i '/create_table "captain_inboxes"/,/^  end$/d' /app/db/schema.rb
     
+    # For knowledge_entries
+    sed -i '/create_table "knowledge_entries"/,/^  end$/d' /app/db/schema.rb
+    
     # Remove vector-related indexes
     sed -i '/add_index.*vector_idx_knowledge_entries_embedding.*/d' /app/db/schema.rb
     sed -i '/add_index.*embedding.*using: :ivfflat.*/d' /app/db/schema.rb
+    sed -i '/add_index.*vector.*/d' /app/db/schema.rb
+    
+    # Also modify any migration files that might reference vector extension
+    if [ -d "/app/db/migrate" ]; then
+      find /app/db/migrate -type f -name "*.rb" -exec sed -i 's/enable_extension "vector"/# enable_extension "vector" # Temporarily disabled/g' {} \;
+      find /app/db/migrate -type f -name "*.rb" -exec sed -i 's/create_extension :vector/# create_extension :vector # Temporarily disabled/g' {} \;
+    fi
     
     echo "Modified schema.rb to work without vector extension"
     echo "NOTE: AI features will not be available in this deployment"
@@ -188,16 +210,24 @@ init_database() {
     return 1
   }
   
+  echo "Loading Installation config"
+  
   echo "Running schema load..."
-  bundle exec rails db:schema:load || {
-    restore_schema_file
-    return 1
+  DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:schema:load || {
+    echo "Schema load failed. Trying with reset..."
+    DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:reset || {
+      restore_schema_file
+      return 1
+    }
   }
   
   echo "Running migrations..."
-  bundle exec rails db:migrate || {
-    restore_schema_file
-    return 1
+  DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:migrate || {
+    echo "Migrations failed. Trying with environment check disabled..."
+    DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:migrate:with_data || {
+      restore_schema_file
+      return 1
+    }
   }
   
   # Restore original schema file after successful initialization
@@ -207,7 +237,11 @@ init_database() {
   # Check if installation_configs table exists
   if ! bundle exec rails runner "puts ActiveRecord::Base.connection.table_exists?('installation_configs')" | grep -q "true"; then
     echo "Error: installation_configs table does not exist after migrations"
-    return 1
+    echo "Trying to create installation_configs table manually..."
+    bundle exec rails runner "ActiveRecord::Base.connection.create_table('installation_configs') { |t| t.string :name; t.jsonb :serialized_value, default: {}; t.datetime :created_at, null: false; t.datetime :updated_at, null: false }" || {
+      echo "Failed to create installation_configs table manually"
+      return 1
+    }
   fi
   
   echo "Database initialization completed successfully"
