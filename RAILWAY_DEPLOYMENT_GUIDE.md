@@ -76,6 +76,14 @@ If you encounter database connection errors during deployment:
 2. Verify that Railway has automatically set the `DATABASE_URL`, `PGHOST`, and `PGPORT` variables
 3. You can manually set these variables if needed
 
+### Shell Command Execution Issues
+
+If you see errors like `sh: exec: line 0: illegal option -c` or `multirun: one or more of the provided commands ended abnormally`:
+
+1. This is likely due to shell compatibility issues in the Alpine Linux container
+2. The Dockerfile has been updated to use a startup script instead of direct shell commands
+3. If you're still encountering issues, check that the startup script has proper permissions and line endings
+
 ### Application Startup Issues
 
 If the application fails to start:
