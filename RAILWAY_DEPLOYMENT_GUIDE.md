@@ -70,12 +70,30 @@ In your Railway project settings, add the following environment variables:
 
 ### Database Connection Issues
 
-If you encounter database connection errors during deployment:
+If you encounter database connection errors during deployment (such as `no response` errors):
 
-1. Check that the PostgreSQL service is running properly
+1. Check that the PostgreSQL service is running properly in your Railway project
 2. Verify that Railway has automatically set the `DATABASE_URL`, `PGHOST`, and `PGPORT` variables
-3. The startup script now includes connection retries (up to 30 attempts with 5-second intervals)
-4. You can manually set these variables if needed
+3. The startup script now includes connection retries (up to 30 attempts with 5-second intervals) and will print connection parameters for debugging
+4. Make sure the PostgreSQL service is in the same Railway project as your Chatwoot application
+5. If using a custom PostgreSQL setup, ensure the database is accessible from the Chatwoot container
+6. You can manually set these variables if needed by going to your Railway project settings
+
+#### Troubleshooting Connection Failures
+
+If you see logs like this:
+```
+Checking database connection...
+-p:5432 - no response
+Database connection attempt 1/30 failed, retrying in 5 seconds...
+```
+
+This indicates that the Chatwoot container cannot reach the PostgreSQL server. Possible solutions:
+
+1. Check if the PostgreSQL service is running in your Railway project
+2. Verify the `PGHOST` and `PGPORT` environment variables are correctly set
+3. If using an external database, ensure it allows connections from Railway's IP range
+4. Try restarting both the PostgreSQL service and the Chatwoot service
 
 ### Database Schema Issues
 
