@@ -10,7 +10,7 @@ RUN apk add --no-cache multirun postgresql-client
 ENTRYPOINT ["multirun"]
 
 # Create a startup script to handle database operations and application startup
-RUN printf '#!/bin/sh\n\npg_isready -h $PGHOST -p $PGPORT && bundle exec rails db:chatwoot_prepare && bundle exec rails db:migrate\nexec multirun "bundle exec sidekiq -C config/sidekiq.yml" "bundle exec rails s -b 0.0.0.0 -p $PORT"\n' > /startup.sh \
+RUN printf '#!/bin/sh\n\n# Function to check database connection with retries\ncheck_db_connection() {\n  echo "Checking database connection..."\n  max_retries=30\n  retries=0\n  while [ $retries -lt $max_retries ]; do\n    if pg_isready -h $PGHOST -p $PGPORT; then\n      echo "Database connection successful!"\n      return 0\n    fi\n    retries=$((retries+1))\n    echo "Database connection attempt $retries/$max_retries failed, retrying in 5 seconds..."\n    sleep 5\n  done\n  echo "Could not connect to database after $max_retries attempts"\n  return 1\n}\n\n# Function to initialize database\ninit_database() {\n  echo "Initializing database..."\n  bundle exec rails db:chatwoot_prepare || return 1\n  echo "Running schema load..."\n  bundle exec rails db:schema:load || return 1\n  echo "Running migrations..."\n  bundle exec rails db:migrate || return 1\n  return 0\n}\n\n# Main execution\nif ! check_db_connection; then\n  echo "Database connection failed. Exiting."\n  exit 1\nfi\n\nif ! init_database; then\n  echo "Database initialization failed. Exiting."\n  exit 1\nfi\n\necho "Starting Chatwoot services..."\nexec multirun "bundle exec sidekiq -C config/sidekiq.yml" "bundle exec rails s -b 0.0.0.0 -p $PORT"\n' > /startup.sh \
     && chmod +x /startup.sh \
     && cat /startup.sh \
     && ls -la /startup.sh

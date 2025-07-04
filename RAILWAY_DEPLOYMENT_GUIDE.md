@@ -74,7 +74,26 @@ If you encounter database connection errors during deployment:
 
 1. Check that the PostgreSQL service is running properly
 2. Verify that Railway has automatically set the `DATABASE_URL`, `PGHOST`, and `PGPORT` variables
-3. You can manually set these variables if needed
+3. The startup script now includes connection retries (up to 30 attempts with 5-second intervals)
+4. You can manually set these variables if needed
+
+### Database Schema Issues
+
+If you see errors like `PG::UndefinedTable: ERROR: relation "installation_configs" does not exist`:
+
+1. This indicates that the database schema hasn't been properly initialized
+2. The startup script now includes a more robust database initialization process:
+   - First checks database connectivity with retries
+   - Runs `db:chatwoot_prepare` to set up the database
+   - Loads the schema with `db:schema:load`
+   - Applies any pending migrations with `db:migrate`
+3. If you're still encountering schema issues, you may need to manually initialize the database:
+   ```
+   railway run bundle exec rails db:reset
+   railway run bundle exec rails db:schema:load
+   railway run bundle exec rails db:migrate
+   ```
+4. Note that `db:reset` will drop and recreate the database, so only use it for fresh installations
 
 ### Shell Command Execution Issues
 
