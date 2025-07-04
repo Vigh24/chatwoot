@@ -28,6 +28,9 @@ The modern customer support platform, an open-source alternative to Intercom, Ze
   <a href="https://marketplace.digitalocean.com/apps/chatwoot?refcode=f2238426a2a8" alt="Deploy to DigitalOcean">
      <img width="200" alt="Deploy to DO" src="https://www.deploytodo.com/do-btn-blue.svg"/>
   </a>
+  <a href="https://railway.app/template/chatwoot" alt="Deploy to Railway">
+     <img width="150" alt="Deploy on Railway" src="https://railway.app/button.svg"/>
+  </a>
 </p>
 
 <img src="./.github/screenshots/dashboard.png#gh-light-mode-only" width="100%" alt="Chat dashboard dark mode"/>
@@ -116,6 +119,14 @@ Chatwoot now supports 1-Click deployment to DigitalOcean as a kubernetes app.
 
 <a href="https://marketplace.digitalocean.com/apps/chatwoot?refcode=f2238426a2a8" alt="Deploy to DigitalOcean">
   <img width="200" alt="Deploy to DO" src="https://www.deploytodo.com/do-btn-blue.svg"/>
+</a>
+
+### Railway deployment
+
+This repository is configured for easy deployment to Railway. Check out the [Railway Deployment Guide](./RAILWAY_DEPLOYMENT.md) for detailed instructions.
+
+<a href="https://railway.app/template/chatwoot" alt="Deploy to Railway">
+  <img width="150" alt="Deploy on Railway" src="https://railway.app/button.svg"/>
 </a>
 
 ### Other deployment options
