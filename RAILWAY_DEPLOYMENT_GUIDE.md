@@ -68,6 +68,19 @@ In your Railway project settings, add the following environment variables:
 
 ## Troubleshooting
 
+### Startup Script Issues
+
+If you encounter errors like `sh: exec: line 0: /startup.sh: not found` or `multirun: one or more of the provided commands ended abnormally`, it indicates that the startup script is not being properly created or found during container startup. The Dockerfile has been updated to use a more reliable method for creating the startup script:
+
+1. **Script Creation**: The startup script is now created using the `COPY <<-'EOT'` heredoc syntax in the Dockerfile, which is more reliable than using `printf`.
+2. **Script Verification**: The build process now includes verification steps to ensure the script exists and is executable.
+
+If you still encounter this issue:
+
+- Rebuild your container with the latest Dockerfile changes.
+- Verify that your Docker build process has sufficient permissions to create files in the root directory.
+- Check if any custom Docker configurations or security policies might be preventing script execution.
+
 ### Database Connection Issues
 
 If you encounter database connection errors during deployment (such as `no response` errors):
@@ -112,23 +125,6 @@ If you see errors like `PG::UndefinedTable: ERROR: relation "installation_config
    railway run bundle exec rails db:migrate
    ```
 4. Note that `db:reset` will drop and recreate the database, so only use it for fresh installations
-
-### Shell Command Execution Issues
-
-If you see errors like `sh: exec: line 0: illegal option -c` or `multirun: one or more of the provided commands ended abnormally`:
-
-1. This is likely due to shell compatibility issues in the Alpine Linux container
-2. The Dockerfile has been updated to use a startup script instead of direct shell commands
-3. If you're still encountering issues, check that the startup script has proper permissions and line endings
-
-#### Startup Script Not Found
-
-If you encounter errors like `sh: exec: line 0: /startup.sh: not found`:
-
-1. This indicates that the startup script was not properly created during the Docker build process
-2. The latest version of the Dockerfile uses `printf` instead of `echo` for more reliable script creation
-3. It also includes verification steps to ensure the script exists and has proper permissions
-4. If you're still having issues, you can try modifying the Dockerfile to create the script in a different location or using a different approach
 
 ### Application Startup Issues
 
