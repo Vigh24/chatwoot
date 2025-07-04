@@ -6,11 +6,14 @@ This guide will help you deploy Chatwoot to Railway using the official Chatwoot 
 
 - Railway account
 - Railway CLI installed (optional, but recommended)
+- GitHub repository for your Chatwoot codebase
 
 ## Files Added for Railway Deployment
 
 1. `railway.json` - Configuration file for Railway deployment
 2. `Dockerfile.railway` - Custom Dockerfile for deploying Chatwoot on Railway
+3. `.github/workflows/deploy_to_railway.yml` - GitHub Actions workflow for deploying to Railway
+4. `.github/workflows/build_and_push_docker.yml` - GitHub Actions workflow for building and pushing Docker image to GitHub Container Registry
 
 ## Deployment Steps
 
@@ -96,3 +99,27 @@ Railway will automatically set up the following variables for you:
 ## Updating Your Deployment
 
 When you make changes to your code, simply push the changes to your GitHub repository (if using GitHub deployment) or run `railway up` again (if using CLI deployment).
+
+## GitHub Actions Workflows
+
+Two GitHub Actions workflows have been set up to automate the deployment process:
+
+### 1. Build and Push Docker Image
+
+The `build_and_push_docker.yml` workflow builds your Chatwoot Docker image using the `Dockerfile.railway` and pushes it to GitHub Container Registry (GHCR). This workflow runs automatically when you push to the `main` branch.
+
+To use this workflow, you need to:
+
+1. Ensure your repository has permission to create packages
+2. The workflow uses the built-in `GITHUB_TOKEN` secret for authentication
+
+### 2. Deploy to Railway
+
+The `deploy_to_railway.yml` workflow deploys your Chatwoot application to Railway using the Railway CLI. This workflow runs automatically when you push to the `main` branch.
+
+To use this workflow, you need to:
+
+1. Create a Railway API token in the Railway dashboard
+2. Add the token as a secret named `RAILWAY_TOKEN` in your GitHub repository settings
+
+With these workflows in place, your Chatwoot application will be automatically deployed to Railway whenever you push changes to the `main` branch.
