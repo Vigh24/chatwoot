@@ -4,8 +4,10 @@ ARG FRONTEND_URL ACTIVE_STORAGE_SERVICE DATABASE_URL PGHOST PGPORT DEFAULT_LOCAL
 
 RUN apk add --no-cache multirun postgresql-client
 
-RUN pg_isready -h $PGHOST -p $PGPORT && bundle exec rails db:chatwoot_prepare && bundle exec rails db:migrate
+# Remove database operations from build phase
+# They will be executed during container startup
 
 ENTRYPOINT ["multirun"]
 
-CMD ["bundle exec sidekiq -C config/sidekiq.yml", "bundle exec rails s -b 0.0.0.0 -p $PORT"]
+# Add a script to check database connection and run migrations before starting the application
+CMD ["sh", "-c", "pg_isready -h $PGHOST -p $PGPORT && bundle exec rails db:chatwoot_prepare && bundle exec rails db:migrate && multirun 'bundle exec sidekiq -C config/sidekiq.yml' 'bundle exec rails s -b 0.0.0.0 -p $PORT'"]
