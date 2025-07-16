@@ -1,0 +1,34 @@
+# Fly.io configuration for Chatwoot (Free tier available)
+app = "chatwoot-free"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile.railway-free"
+
+[env]
+  RAILS_ENV = "production"
+  NODE_ENV = "production"
+  INSTALLATION_ENV = "fly"
+  RAILS_LOG_TO_STDOUT = "true"
+  RAILS_SERVE_STATIC_FILES = "true"
+  ACTIVE_STORAGE_SERVICE = "local"
+  DEFAULT_LOCALE = "en"
+  FORCE_SSL = "true"
+  ENABLE_ACCOUNT_SIGNUP = "false"
+  DISABLE_AI_FEATURES = "true"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512
+
+[[mounts]]
+  source = "chatwoot_data"
+  destination = "/app/storage"

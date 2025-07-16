@@ -1,0 +1,101 @@
+FROM chatwoot/chatwoot:latest
+
+# Install required packages
+RUN apk add --no-cache \
+    postgresql-client \
+    sqlite \
+    redis \
+    curl \
+    bash \
+    tzdata
+
+# Set timezone
+ENV TZ=UTC
+
+# Create startup script for free deployment (no external services)
+COPY <<-'EOT' /startup-free.sh
+#!/bin/bash
+set -e
+
+echo "🚀 Starting Chatwoot (Free Tier - No AI Features)"
+echo "================================================"
+
+# Function to setup SQLite database (free alternative)
+setup_sqlite() {
+  echo "Setting up SQLite database..."
+  
+  # Create storage directory
+  mkdir -p /app/storage
+  
+  # Set database URL to SQLite
+  export DATABASE_URL="sqlite3:///app/storage/production.sqlite3"
+  
+  # Apply schema modifications to disable vector features
+  if [ -f "/app/db/schema.rb" ]; then
+    cp /app/db/schema.rb /app/db/schema.rb.bak
+    
+    # Remove vector extension and related tables
+    sed -i 's/enable_extension "vector"/# enable_extension "vector" # Disabled for free tier/g' /app/db/schema.rb
+    sed -i '/create_table "article_embeddings"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "captain_assistant_responses"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "captain_assistants"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "captain_documents"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "captain_inboxes"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "knowledge_entries"/,/^  end$/d' /app/db/schema.rb
+    
+    echo "✅ Disabled AI features for free tier deployment"
+  fi
+  
+  # Initialize database
+  echo "Initializing SQLite database..."
+  bundle exec rails db:create 2>/dev/null || echo "Database may already exist"
+  DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:schema:load || {
+    echo "Schema load failed, trying reset..."
+    DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:reset
+  }
+  
+  # Restore original schema
+  if [ -f "/app/db/schema.rb.bak" ]; then
+    cp /app/db/schema.rb.bak /app/db/schema.rb
+  fi
+  
+  echo "✅ SQLite database setup completed"
+}
+
+# Function to start Redis in background
+start_redis() {
+  echo "Starting Redis server..."
+  redis-server --daemonize yes --port 6379 --bind 127.0.0.1
+  sleep 2
+  echo "✅ Redis server started"
+}
+
+# Function to start services
+start_services() {
+  echo "Starting Chatwoot services..."
+  
+  # Start Sidekiq in background
+  bundle exec sidekiq -C config/sidekiq.yml -d
+  
+  # Start Rails server
+  exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3000}
+}
+
+# Main execution
+echo "🔧 Setting up free tier deployment..."
+
+# Setup database
+setup_sqlite
+
+# Start Redis
+start_redis
+
+# Start services
+start_services
+EOT
+
+# Make startup script executable
+RUN chmod +x /startup-free.sh
+
+# Set the default command
+CMD ["/startup-free.sh"]
