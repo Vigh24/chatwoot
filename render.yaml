@@ -109,6 +109,13 @@ services:
       - key: DEFAULT_LOCALE
         value: en
 
+  # Redis Service
+  - type: redis
+    name: chatwoot-redis
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: allkeys-lru
+
 databases:
   # PostgreSQL with pgvector support
   - name: chatwoot-postgres
@@ -118,11 +125,3 @@ databases:
     region: oregon
     postgresMajorVersion: 16
     # Render automatically includes common extensions including pgvector
-
-services:
-  # Redis Service
-  - type: redis
-    name: chatwoot-redis
-    plan: starter
-    region: oregon
-    maxmemoryPolicy: allkeys-lru
