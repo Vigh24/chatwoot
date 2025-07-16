@@ -1,0 +1,64 @@
+services:
+  # Standalone Chatwoot (All services in one container - FREE TIER)
+  - type: web
+    name: chatwoot-standalone
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render-standalone
+    plan: free
+    region: oregon
+    branch: main
+    healthCheckPath: /
+    autoDeploy: true
+    disk:
+      name: chatwoot-data
+      mountPath: /var/lib/postgresql/data
+      sizeGB: 1
+    envVars:
+      - key: RAILS_ENV
+        value: production
+      - key: NODE_ENV
+        value: production
+      - key: INSTALLATION_ENV
+        value: render
+      - key: RAILS_LOG_TO_STDOUT
+        value: "true"
+      - key: RAILS_SERVE_STATIC_FILES
+        value: "true"
+      - key: SECRET_KEY_BASE
+        generateValue: true
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: chatwoot-standalone
+          property: host
+      - key: DATABASE_URL
+        value: postgresql://chatwoot:chatwoot@localhost:5432/chatwoot
+      - key: REDIS_URL
+        value: redis://localhost:6379
+      - key: ACTIVE_STORAGE_SERVICE
+        value: local
+      - key: DEFAULT_LOCALE
+        value: en
+      - key: FORCE_SSL
+        value: "true"
+      - key: ENABLE_ACCOUNT_SIGNUP
+        value: "false"
+      - key: MAILER_SENDER_EMAIL
+        value: noreply@yourdomain.com
+      - key: SMTP_DOMAIN
+        value: yourdomain.com
+      - key: SMTP_ADDRESS
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        value: your-email@gmail.com
+      - key: SMTP_PASSWORD
+        value: your-app-password
+      - key: SMTP_AUTHENTICATION
+        value: plain
+      - key: SMTP_ENABLE_STARTTLS_AUTO
+        value: "true"
+      # Disable AI features for free tier (no pgvector)
+      - key: DISABLE_AI_FEATURES
+        value: "true"

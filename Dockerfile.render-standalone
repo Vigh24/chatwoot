@@ -1,0 +1,165 @@
+FROM chatwoot/chatwoot:latest
+
+# Install required packages including PostgreSQL server
+RUN apk add --no-cache \
+    postgresql \
+    postgresql-client \
+    redis \
+    curl \
+    bash \
+    tzdata \
+    su-exec
+
+# Set timezone
+ENV TZ=UTC
+
+# Create postgres user and data directory
+RUN adduser -D -s /bin/sh postgres && \
+    mkdir -p /var/lib/postgresql/data && \
+    chown -R postgres:postgres /var/lib/postgresql && \
+    mkdir -p /run/postgresql && \
+    chown -R postgres:postgres /run/postgresql
+
+# Create startup script for standalone deployment (all services in one container)
+COPY <<-'EOT' /startup-standalone.sh
+#!/bin/bash
+set -e
+
+echo "🚀 Starting Chatwoot Standalone (Free Tier - All Services)"
+echo "=========================================================="
+
+# Function to initialize PostgreSQL
+init_postgres() {
+  echo "🔧 Initializing PostgreSQL..."
+  
+  # Initialize database if not exists
+  if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
+    echo "Initializing PostgreSQL database..."
+    su-exec postgres initdb -D /var/lib/postgresql/data
+    
+    # Configure PostgreSQL
+    echo "host all all 0.0.0.0/0 trust" >> /var/lib/postgresql/data/pg_hba.conf
+    echo "listen_addresses = '*'" >> /var/lib/postgresql/data/postgresql.conf
+    echo "port = 5432" >> /var/lib/postgresql/data/postgresql.conf
+  fi
+  
+  # Start PostgreSQL
+  echo "Starting PostgreSQL server..."
+  su-exec postgres pg_ctl -D /var/lib/postgresql/data -l /var/lib/postgresql/data/logfile start
+  
+  # Wait for PostgreSQL to be ready
+  sleep 3
+  until su-exec postgres pg_isready -h localhost -p 5432; do
+    echo "Waiting for PostgreSQL to be ready..."
+    sleep 1
+  done
+  
+  # Create database and user
+  echo "Setting up Chatwoot database..."
+  su-exec postgres psql -c "CREATE DATABASE chatwoot;" 2>/dev/null || echo "Database may already exist"
+  su-exec postgres psql -c "CREATE USER chatwoot WITH PASSWORD 'chatwoot';" 2>/dev/null || echo "User may already exist"
+  su-exec postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE chatwoot TO chatwoot;" 2>/dev/null || true
+  
+  # Set DATABASE_URL
+  export DATABASE_URL="postgresql://chatwoot:chatwoot@localhost:5432/chatwoot"
+  
+  echo "✅ PostgreSQL ready!"
+}
+
+# Function to start Redis
+start_redis() {
+  echo "🔧 Starting Redis server..."
+  redis-server --daemonize yes --port 6379 --bind 127.0.0.1
+  sleep 2
+  export REDIS_URL="redis://localhost:6379"
+  echo "✅ Redis server started"
+}
+
+# Function to disable AI features (no pgvector)
+disable_ai_features() {
+  echo "🔧 Disabling AI features for free tier..."
+  
+  # Apply schema modifications to disable vector features
+  if [ -f "/app/db/schema.rb" ]; then
+    cp /app/db/schema.rb /app/db/schema.rb.bak
+    
+    # Remove vector extension and related tables
+    sed -i 's/enable_extension "vector"/# enable_extension "vector" # Disabled for free tier/g' /app/db/schema.rb
+    sed -i '/create_table "article_embeddings"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "captain_assistant_responses"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "captain_assistants"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "captain_documents"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "captain_inboxes"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "knowledge_entries"/,/^  end$/d' /app/db/schema.rb
+    
+    # Also modify migration files
+    if [ -d "/app/db/migrate" ]; then
+      find /app/db/migrate -type f -name "*.rb" -exec sed -i 's/enable_extension "vector"/# enable_extension "vector" # Disabled/g' {} \;
+      find /app/db/migrate -type f -name "*.rb" -exec sed -i 's/create_extension :vector/# create_extension :vector # Disabled/g' {} \;
+    fi
+    
+    echo "✅ AI features disabled for free tier deployment"
+  fi
+}
+
+# Function to setup database
+setup_database() {
+  echo "🔧 Setting up Chatwoot database..."
+  
+  # Disable AI features
+  disable_ai_features
+  
+  # Create database if it doesn't exist
+  echo "Creating database if it doesn't exist..."
+  bundle exec rails db:create 2>/dev/null || echo "Database may already exist, continuing..."
+  
+  # Load schema without vector features
+  echo "Loading database schema..."
+  DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:schema:load || {
+    echo "Schema load failed, trying reset..."
+    DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:reset || {
+      echo "Reset failed, trying migrations..."
+      DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:migrate
+    }
+  }
+  
+  # Restore original schema file
+  if [ -f "/app/db/schema.rb.bak" ]; then
+    cp /app/db/schema.rb.bak /app/db/schema.rb
+  fi
+  
+  echo "✅ Database setup completed!"
+}
+
+# Function to start services
+start_services() {
+  echo "🚀 Starting Chatwoot services..."
+  
+  # Start Sidekiq in background
+  bundle exec sidekiq -C config/sidekiq.yml -d
+  
+  # Start Rails server
+  exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3000}
+}
+
+# Main execution
+echo "🔧 Setting up standalone deployment..."
+
+# Initialize and start PostgreSQL
+init_postgres
+
+# Start Redis
+start_redis
+
+# Setup database
+setup_database
+
+# Start services
+start_services
+EOT
+
+# Make startup script executable
+RUN chmod +x /startup-standalone.sh
+
+# Set the default command
+CMD ["/startup-standalone.sh"]
