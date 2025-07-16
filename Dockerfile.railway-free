@@ -19,6 +19,18 @@ set -e
 echo "🚀 Starting Chatwoot (Free Tier - AI Features Disabled)"
 echo "======================================================"
 
+# Function to ensure SECRET_KEY_BASE is set
+ensure_secret_key() {
+  if [ -z "$SECRET_KEY_BASE" ]; then
+    echo "🔧 Generating SECRET_KEY_BASE..."
+    # Generate a random 128-character hex string
+    export SECRET_KEY_BASE=$(openssl rand -hex 64)
+    echo "✅ SECRET_KEY_BASE generated"
+  else
+    echo "✅ SECRET_KEY_BASE already set"
+  fi
+}
+
 # Function to wait for database
 wait_for_db() {
   echo "Waiting for PostgreSQL to be ready..."
@@ -151,6 +163,9 @@ start_services() {
 
 # Main execution
 echo "🔧 Setting up free tier deployment..."
+
+# Ensure SECRET_KEY_BASE is set
+ensure_secret_key
 
 # Setup database
 setup_database
