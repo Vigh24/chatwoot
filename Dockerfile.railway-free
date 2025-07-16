@@ -154,8 +154,12 @@ start_redis() {
 start_services() {
   echo "🚀 Starting Chatwoot services..."
   
-  # Start Sidekiq in background
-  bundle exec sidekiq -C config/sidekiq.yml -d
+  # Start Sidekiq in background (without deprecated -d flag)
+  bundle exec sidekiq -C config/sidekiq.yml &
+  
+  # Wait a moment for Sidekiq to start
+  sleep 2
+  echo "✅ Sidekiq background jobs started"
   
   # Start Rails server
   exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3000}
