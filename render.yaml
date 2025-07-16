@@ -1,0 +1,128 @@
+services:
+  # Web Service - Chatwoot Application
+  - type: web
+    name: chatwoot-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    plan: starter
+    region: oregon
+    branch: main
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: RAILS_ENV
+        value: production
+      - key: NODE_ENV
+        value: production
+      - key: INSTALLATION_ENV
+        value: render
+      - key: RAILS_LOG_TO_STDOUT
+        value: "true"
+      - key: RAILS_SERVE_STATIC_FILES
+        value: "true"
+      - key: SECRET_KEY_BASE
+        generateValue: true
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: chatwoot-web
+          property: host
+      - key: DATABASE_URL
+        fromDatabase:
+          name: chatwoot-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: chatwoot-redis
+          property: connectionString
+      - key: POSTGRES_PASSWORD
+        generateValue: true
+      - key: REDIS_PASSWORD
+        generateValue: true
+      - key: ACTIVE_STORAGE_SERVICE
+        value: local
+      - key: DEFAULT_LOCALE
+        value: en
+      - key: FORCE_SSL
+        value: "true"
+      - key: ENABLE_ACCOUNT_SIGNUP
+        value: "false"
+      - key: MAILER_SENDER_EMAIL
+        value: noreply@yourdomain.com
+      - key: SMTP_DOMAIN
+        value: yourdomain.com
+      - key: SMTP_ADDRESS
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        value: your-email@gmail.com
+      - key: SMTP_PASSWORD
+        value: your-app-password
+      - key: SMTP_AUTHENTICATION
+        value: plain
+      - key: SMTP_ENABLE_STARTTLS_AUTO
+        value: "true"
+
+  # Background Jobs - Sidekiq Worker
+  - type: worker
+    name: chatwoot-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    plan: starter
+    region: oregon
+    branch: main
+    autoDeploy: true
+    startCommand: bundle exec sidekiq -C config/sidekiq.yml
+    envVars:
+      - key: RAILS_ENV
+        value: production
+      - key: NODE_ENV
+        value: production
+      - key: INSTALLATION_ENV
+        value: render
+      - key: RAILS_LOG_TO_STDOUT
+        value: "true"
+      - key: SECRET_KEY_BASE
+        sync: false
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: chatwoot-web
+          property: host
+      - key: DATABASE_URL
+        fromDatabase:
+          name: chatwoot-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: chatwoot-redis
+          property: connectionString
+      - key: POSTGRES_PASSWORD
+        sync: false
+      - key: REDIS_PASSWORD
+        sync: false
+      - key: ACTIVE_STORAGE_SERVICE
+        value: local
+      - key: DEFAULT_LOCALE
+        value: en
+
+databases:
+  # PostgreSQL with pgvector support
+  - name: chatwoot-postgres
+    databaseName: chatwoot
+    user: chatwoot
+    plan: starter
+    region: oregon
+    postgresMajorVersion: 16
+    # Render automatically includes common extensions including pgvector
+
+services:
+  # Redis Service
+  - type: redis
+    name: chatwoot-redis
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: allkeys-lru

@@ -1,0 +1,149 @@
+FROM chatwoot/chatwoot:latest
+
+# Install required packages
+RUN apk add --no-cache \
+    postgresql-client \
+    curl \
+    bash \
+    tzdata
+
+# Set timezone
+ENV TZ=UTC
+
+# Create startup script for database initialization and app startup
+COPY <<-'EOT' /startup.sh
+#!/bin/bash
+set -e
+
+# Function to wait for database
+wait_for_db() {
+  echo "Waiting for PostgreSQL to be ready..."
+  until pg_isready -h ${DATABASE_HOST:-localhost} -p ${DATABASE_PORT:-5432} -U ${DATABASE_USER:-postgres}; do
+    echo "PostgreSQL is unavailable - sleeping"
+    sleep 2
+  done
+  echo "PostgreSQL is ready!"
+}
+
+# Function to check for pgvector extension
+check_pgvector() {
+  echo "Checking for pgvector extension..."
+  
+  # Extract database connection details from DATABASE_URL if available
+  if [ -n "$DATABASE_URL" ]; then
+    # Parse DATABASE_URL: postgres://user:pass@host:port/dbname
+    DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\).*/\1/p')
+    DB_PORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+    DB_USER=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
+    DB_NAME=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
+    
+    export DATABASE_HOST=${DB_HOST:-localhost}
+    export DATABASE_PORT=${DB_PORT:-5432}
+    export DATABASE_USER=${DB_USER:-postgres}
+    export DATABASE_NAME=${DB_NAME:-chatwoot}
+  fi
+  
+  # Check if pgvector extension is available
+  if psql "$DATABASE_URL" -c "SELECT * FROM pg_available_extensions WHERE name = 'vector';" | grep -q "vector"; then
+    echo "✅ pgvector extension is available!"
+    
+    # Try to enable the extension if not already enabled
+    psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector;" || {
+      echo "⚠️  Could not enable vector extension, but it's available"
+    }
+    
+    return 0
+  else
+    echo "❌ pgvector extension is not available"
+    echo "This will disable AI features in Chatwoot"
+    return 1
+  fi
+}
+
+# Function to initialize database
+init_database() {
+  echo "Initializing database..."
+  
+  # Wait for database to be ready
+  wait_for_db
+  
+  # Check for pgvector extension
+  PGVECTOR_AVAILABLE=false
+  if check_pgvector; then
+    PGVECTOR_AVAILABLE=true
+    echo "✅ AI features will be available"
+  else
+    echo "⚠️  AI features will be disabled"
+  fi
+  
+  # Create database if it doesn't exist
+  echo "Creating database if it doesn't exist..."
+  bundle exec rails db:create 2>/dev/null || echo "Database may already exist, continuing..."
+  
+  # Run database setup
+  echo "Running database setup..."
+  if [ "$PGVECTOR_AVAILABLE" = "true" ]; then
+    # Full setup with pgvector support
+    bundle exec rails db:chatwoot_prepare || {
+      echo "Database preparation failed, trying alternative approach..."
+      DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:schema:load
+      bundle exec rails db:migrate
+    }
+  else
+    # Setup without pgvector - apply workaround
+    echo "Setting up database without pgvector support..."
+    
+    # Backup original schema
+    cp /app/db/schema.rb /app/db/schema.rb.bak 2>/dev/null || true
+    
+    # Remove vector extension and related tables from schema
+    sed -i 's/enable_extension "vector"/# enable_extension "vector" # Disabled - extension not available/g' /app/db/schema.rb
+    sed -i '/create_table "article_embeddings"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "captain_assistant_responses"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "captain_assistants"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "captain_documents"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "captain_inboxes"/,/^  end$/d' /app/db/schema.rb
+    sed -i '/create_table "knowledge_entries"/,/^  end$/d' /app/db/schema.rb
+    
+    # Load modified schema
+    DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:schema:load || {
+      echo "Schema load failed, trying reset..."
+      DISABLE_DATABASE_ENVIRONMENT_CHECK=1 bundle exec rails db:reset
+    }
+    
+    # Restore original schema file
+    cp /app/db/schema.rb.bak /app/db/schema.rb 2>/dev/null || true
+  fi
+  
+  echo "Database initialization completed!"
+}
+
+# Function to start the appropriate service
+start_service() {
+  if [ "$1" = "worker" ]; then
+    echo "Starting Sidekiq worker..."
+    exec bundle exec sidekiq -C config/sidekiq.yml
+  else
+    echo "Starting Rails server..."
+    exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3000}
+  fi
+}
+
+# Main execution
+echo "🚀 Starting Chatwoot on Render..."
+echo "Service type: ${SERVICE_TYPE:-web}"
+
+# Initialize database (only for web service to avoid conflicts)
+if [ "${SERVICE_TYPE:-web}" = "web" ]; then
+  init_database
+fi
+
+# Start the appropriate service
+start_service "${SERVICE_TYPE:-web}"
+EOT
+
+# Make startup script executable
+RUN chmod +x /startup.sh
+
+# Set the default command
+CMD ["/startup.sh"]
