@@ -22,22 +22,48 @@ echo "======================================================"
 # Function to wait for database
 wait_for_db() {
   echo "Waiting for PostgreSQL to be ready..."
+  echo "DATABASE_URL: ${DATABASE_URL}"
   
-  # Extract database connection details from DATABASE_URL if available
+  # Extract database connection details from DATABASE_URL
   if [ -n "$DATABASE_URL" ]; then
-    DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\).*/\1/p')
-    DB_PORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+    # Parse DATABASE_URL: postgresql://user:pass@host:port/dbname
+    # Extract host (everything between @ and : or /)
+    DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:/]*\).*/\1/p')
+    # Extract port (number after host: and before /)
+    DB_PORT=$(echo $DATABASE_URL | sed -n 's/.*@[^:]*:\([0-9]*\)\/.*/\1/p')
+    # If no port specified, use default
+    if [ -z "$DB_PORT" ]; then
+      DB_PORT=5432
+    fi
     
-    export DATABASE_HOST=${DB_HOST:-localhost}
-    export DATABASE_PORT=${DB_PORT:-5432}
+    export DATABASE_HOST=${DB_HOST}
+    export DATABASE_PORT=${DB_PORT}
+    
+    echo "Extracted DB_HOST: $DATABASE_HOST"
+    echo "Extracted DB_PORT: $DATABASE_PORT"
+  else
+    export DATABASE_HOST=localhost
+    export DATABASE_PORT=5432
+    echo "Using default database connection"
   fi
   
-  # Wait for database connection
-  until pg_isready -h ${DATABASE_HOST:-localhost} -p ${DATABASE_PORT:-5432}; do
-    echo "PostgreSQL is unavailable - sleeping"
+  # Wait for database connection with timeout
+  echo "Testing connection to $DATABASE_HOST:$DATABASE_PORT..."
+  max_attempts=60
+  attempt=1
+  
+  while [ $attempt -le $max_attempts ]; do
+    if pg_isready -h "$DATABASE_HOST" -p "$DATABASE_PORT" -q; then
+      echo "✅ PostgreSQL is ready!"
+      return 0
+    fi
+    echo "Attempt $attempt/$max_attempts: PostgreSQL is unavailable - sleeping"
     sleep 2
+    attempt=$((attempt + 1))
   done
-  echo "✅ PostgreSQL is ready!"
+  
+  echo "❌ Failed to connect to PostgreSQL after $max_attempts attempts"
+  return 1
 }
 
 # Function to disable AI features (no pgvector)
