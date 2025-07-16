@@ -3,7 +3,7 @@ services:
   - type: web
     name: chatwoot-web-free
     runtime: docker
-    dockerfilePath: ./Dockerfile.render
+    dockerfilePath: ./Dockerfile.railway-free
     plan: free
     region: oregon
     branch: main
@@ -28,7 +28,9 @@ services:
           name: chatwoot-web-free
           property: host
       - key: DATABASE_URL
-        value: sqlite3:///app/storage/production.sqlite3
+        fromDatabase:
+          name: chatwoot-postgres-free
+          property: connectionString
       - key: REDIS_URL
         value: redis://localhost:6379
       - key: ACTIVE_STORAGE_SERVICE
@@ -58,3 +60,12 @@ services:
       # Disable AI features for free tier (no pgvector)
       - key: DISABLE_AI_FEATURES
         value: "true"
+
+databases:
+  # PostgreSQL without pgvector (FREE TIER)
+  - name: chatwoot-postgres-free
+    databaseName: chatwoot
+    user: chatwoot
+    plan: free
+    region: oregon
+    # Note: Free tier PostgreSQL doesn't include pgvector extension
