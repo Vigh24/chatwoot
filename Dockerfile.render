@@ -120,7 +120,8 @@ init_database() {
 
 # Function to start the appropriate service
 start_service() {
-  if [ "$1" = "worker" ]; then
+  # Detect service type from Render environment or service name
+  if [[ "$RENDER_SERVICE_NAME" == *"worker"* ]] || [[ "$1" == "worker" ]]; then
     echo "Starting Sidekiq worker..."
     exec bundle exec sidekiq -C config/sidekiq.yml
   else
@@ -131,15 +132,15 @@ start_service() {
 
 # Main execution
 echo "🚀 Starting Chatwoot on Render..."
-echo "Service type: ${SERVICE_TYPE:-web}"
+echo "Service name: ${RENDER_SERVICE_NAME:-unknown}"
 
 # Initialize database (only for web service to avoid conflicts)
-if [ "${SERVICE_TYPE:-web}" = "web" ]; then
+if [[ "$RENDER_SERVICE_NAME" != *"worker"* ]]; then
   init_database
 fi
 
 # Start the appropriate service
-start_service "${SERVICE_TYPE:-web}"
+start_service
 EOT
 
 # Make startup script executable
