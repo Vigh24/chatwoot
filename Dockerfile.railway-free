@@ -161,9 +161,16 @@ start_services() {
   sleep 2
   echo "✅ Sidekiq background jobs started"
   
+  # Set binding environment variables for Puma
+  export BINDING="0.0.0.0"
+  export PORT=${PORT:-3000}
+  
   # Start Rails server with explicit binding
-  echo "Starting Rails server on 0.0.0.0:${PORT:-3000}..."
-  exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3000} --environment=production
+  echo "Starting Rails server on 0.0.0.0:${PORT}..."
+  echo "Environment: RAILS_ENV=$RAILS_ENV, BINDING=$BINDING, PORT=$PORT"
+  
+  # Use Puma directly with explicit binding
+  exec bundle exec puma -C config/puma.rb -b tcp://0.0.0.0:${PORT} -e production
 }
 
 # Main execution
