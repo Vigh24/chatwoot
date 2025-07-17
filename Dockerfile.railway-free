@@ -169,8 +169,15 @@ start_services() {
   echo "Starting Rails server on 0.0.0.0:${PORT}..."
   echo "Environment: RAILS_ENV=$RAILS_ENV, BINDING=$BINDING, PORT=$PORT"
   
-  # Use Puma directly with explicit binding
-  exec bundle exec puma -C config/puma.rb -b tcp://0.0.0.0:${PORT} -e production
+  # Use Puma directly WITHOUT config file to avoid cluster mode
+  # Single mode with explicit binding
+  exec bundle exec puma \
+    --bind tcp://0.0.0.0:${PORT} \
+    --environment production \
+    --threads 5:5 \
+    --workers 0 \
+    --preload-app \
+    config.ru
 }
 
 # Main execution
